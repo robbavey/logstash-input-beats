@@ -47,6 +47,11 @@ public class BeatsHandlerTest {
         public void onException(ChannelHandlerContext ctx, Throwable cause) { onExceptionCalled = true; }
 
         @Override
+        public void onBatch(final ChannelHandlerContext ctx, final Batch batch) {
+
+        }
+
+        @Override
         public void onChannelInitializeException(ChannelHandlerContext ctx, Throwable cause) {
         }
 

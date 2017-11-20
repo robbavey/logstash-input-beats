@@ -2,12 +2,17 @@ package org.logstash.beats;
 
 import io.netty.channel.ChannelHandlerContext;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * This class is implemented in ruby in `lib/logstash/inputs/beats/message_listener`,
  * this class is used to link the events triggered from the different connection to the actual
  * work inside the plugin.
  */
 public interface IMessageListener {
+
+
+    public void onBatch(ChannelHandlerContext ctx, Batch batch, AtomicBoolean processing);
     /**
      * This is triggered on every new message parsed by the beats handler
      * and should be executed in the ruby world.

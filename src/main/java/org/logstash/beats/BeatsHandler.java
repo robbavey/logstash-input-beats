@@ -40,7 +40,7 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
     @Override
     public void channelRead0(ChannelHandlerContext ctx, Batch batch) throws Exception {
         if(logger.isDebugEnabled()) {
-            logger.debug(format("Received a new payload"));
+            logger.debug(format("Received a new payload of size " + batch.getBatchSize()));
         }
 
         processing.compareAndSet(false, true);
@@ -51,10 +51,9 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
             }
             messageListener.onNewMessage(ctx, message);
 
-            if(needAck(message)) {
-                ack(ctx, message);
-            }
-        }
+        messageListener.onBatch(ctx, batch, processing);
+        logger.info("Inline - Batch id: #{batch_id}, Ack: " + batch.getMessages().get(batch.getBatchSize()-1).getSequence());
+        writeAck(ctx, batch.getProtocol(), batch.getMessages().get(batch.getBatchSize()-1).getSequence());
         ctx.flush();
         processing.compareAndSet(true, false);
 

@@ -4,6 +4,8 @@ import io.netty.channel.ChannelHandlerContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 
 /**
  * This class is implemented in ruby in `lib/logstash/inputs/beats/message_listener`,
@@ -14,6 +16,7 @@ import org.apache.logging.log4j.Logger;
 public class MessageListener implements IMessageListener {
     private final static Logger logger = LogManager.getLogger(MessageListener.class);
 
+    public void onBatch(ChannelHandlerContext ctx, Batch batch, AtomicBoolean ab) { logger.debug("onBatch"); }
 
     /**
      * This is triggered on every new message parsed by the beats handler

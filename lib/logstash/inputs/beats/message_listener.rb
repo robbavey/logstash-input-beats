@@ -26,7 +26,63 @@ module LogStash module Inputs class Beats
       @codec_transformer = DecodedEventTransform.new(@input)
     end
 
-    def onNewMessage(ctx, message)
+
+    def onBatch(ctx, batch, processing)
+      fake_queue = []
+      high_sequence = -1
+      batch.get_messages.each do |message|
+        seq = onMessage(ctx, message, fake_queue)
+        high_sequence = seq if seq > high_sequence
+      end
+      # x = @queue.push_batch(fake_queue)
+      x = @queue.push_batch_with_callback(fake_queue, LogStash::Inputs::Beats::AckingCallback.new(input, batch.get_protocol, ctx, processing))
+      input.logger.info("wrote sequence number #{high_sequence}")
+      high_sequence
+    end
+      # for(Message message : batch.getMessages()) {
+      #     logger.error("Sending a message " + message.getSequence());
+      # logger.error("Message contents " + message.getData());
+      # if(logger.isDebugEnabled()) {
+      #     logger.debug("Sending a new message for the listener, sequence: " + message.getSequence());
+      # }
+      # messageListener.onNewMessage(ctx, message);
+
+      # if(needAck(message)) {
+      #     ack(ctx, message);
+      # }
+      # }
+
+    # end
+
+
+  def onMessage(ctx, message, queue)
+    hash = message.getData()
+
+    hash['@sequence_number'] = message.getSequence
+
+    begin
+      hash.get("@metadata").put("ip_address", ctx.channel().remoteAddress().getAddress().getHostAddress())
+    rescue #should never happen, but don't allow an error here to stop beats input
+      input.logger.warn("Could not retrieve remote IP address for beats input.")
+    end
+
+    target_field = extract_target_field(hash)
+
+    if target_field.nil?
+      event = LogStash::Event.new(hash)
+      @nocodec_transformer.transform(event)
+      queue << event
+    else
+      codec(ctx).accept(CodecCallbackListener.new(target_field,
+                                                  hash,
+                                                  message.getIdentityStream(),
+                                                  @codec_transformer,
+                                                  queue))
+    end
+    message.getSequence
+  end
+
+  def onNewMessage(ctx, message)
       hash = message.getData()
 
       begin
