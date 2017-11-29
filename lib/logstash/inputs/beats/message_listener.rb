@@ -27,33 +27,17 @@ module LogStash module Inputs class Beats
     end
 
 
-    def onBatch(ctx, batch, processing)
-      fake_queue = []
-      high_sequence = -1
-      batch.get_messages.each do |message|
-        seq = onMessage(ctx, message, fake_queue)
-        high_sequence = seq if seq > high_sequence
-      end
-      # x = @queue.push_batch(fake_queue)
-      x = @queue.push_batch_with_callback(fake_queue, LogStash::Inputs::Beats::AckingCallback.new(input, batch.get_protocol, ctx, processing))
-      input.logger.info("wrote sequence number #{high_sequence}")
-      high_sequence
+  def onBatch(ctx, batch)
+    batch_holder = []
+    high_sequence = -1
+    batch.get_messages.each do |message|
+      seq = onMessage(ctx, message, batch_holder)
+      high_sequence = seq if seq > high_sequence
     end
-      # for(Message message : batch.getMessages()) {
-      #     logger.error("Sending a message " + message.getSequence());
-      # logger.error("Message contents " + message.getData());
-      # if(logger.isDebugEnabled()) {
-      #     logger.debug("Sending a new message for the listener, sequence: " + message.getSequence());
-      # }
-      # messageListener.onNewMessage(ctx, message);
-
-      # if(needAck(message)) {
-      #     ack(ctx, message);
-      # }
-      # }
-
-    # end
-
+    @queue.push_batch(batch_holder)
+    input.logger.debug("wrote sequence number #{high_sequence}")
+    high_sequence
+  end
 
   def onMessage(ctx, message, queue)
     hash = message.getData()

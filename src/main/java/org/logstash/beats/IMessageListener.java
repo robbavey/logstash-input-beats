@@ -12,7 +12,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public interface IMessageListener {
 
 
-    public void onBatch(ChannelHandlerContext ctx, Batch batch, AtomicBoolean processing);
+    /**
+     * This is triggered for every batch of messages parsed by the beats handler,
+     * to be executed in the ruby world
+     * @param ctx
+     * @param batch
+     * @return The highest sequence number processed
+     */
+    public long onBatch(ChannelHandlerContext ctx, Batch batch);
     /**
      * This is triggered on every new message parsed by the beats handler
      * and should be executed in the ruby world.

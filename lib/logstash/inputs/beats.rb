@@ -156,6 +156,10 @@ class LogStash::Inputs::Beats < LogStash::Inputs::Base
     @server = create_server
   end # def register
 
+  def supports_end_to_end?
+    true
+  end
+
   def create_server
     server = org.logstash.beats.Server.new(@host, @port, @client_inactivity_timeout)
     if @ssl

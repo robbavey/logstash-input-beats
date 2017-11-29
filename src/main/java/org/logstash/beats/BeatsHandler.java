@@ -29,7 +29,6 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
     public void handlerAdded(ChannelHandlerContext ctx) throws Exception {
         context = ctx;
         messageListener.onNewConnection(ctx);
-
     }
 
     @Override
@@ -45,14 +44,8 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
 
         processing.compareAndSet(false, true);
 
-        for(Message message : batch.getMessages()) {
-            if(logger.isDebugEnabled()) {
-                logger.debug(format("Sending a new message for the listener, sequence: " + message.getSequence()));
-            }
-            messageListener.onNewMessage(ctx, message);
+        long sequence = messageListener.onBatch(ctx, batch);
 
-        messageListener.onBatch(ctx, batch, processing);
-        logger.info("Inline - Batch id: #{batch_id}, Ack: " + batch.getMessages().get(batch.getBatchSize()-1).getSequence());
         writeAck(ctx, batch.getProtocol(), batch.getMessages().get(batch.getBatchSize()-1).getSequence());
         ctx.flush();
         processing.compareAndSet(true, false);
