@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class MessageListener implements IMessageListener {
     private final static Logger logger = LogManager.getLogger(MessageListener.class);
 
-    public long onBatch(ChannelHandlerContext ctx, Batch batch) { logger.debug("onBatch"); return 0;}
+    public int onBatch(ChannelHandlerContext ctx, Batch batch) { logger.debug("onBatch"); return 0;}
 
     /**
      * This is triggered on every new message parsed by the beats handler

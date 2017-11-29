@@ -44,9 +44,9 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
 
         processing.compareAndSet(false, true);
 
-        long sequence = messageListener.onBatch(ctx, batch);
+        int sequence = messageListener.onBatch(ctx, batch);
 
-        writeAck(ctx, batch.getProtocol(), batch.getMessages().get(batch.getBatchSize()-1).getSequence());
+        writeAck(ctx, batch.getProtocol(), sequence);
         ctx.flush();
         processing.compareAndSet(true, false);
 

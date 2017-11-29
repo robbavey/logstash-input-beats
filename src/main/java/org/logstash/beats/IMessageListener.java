@@ -19,7 +19,7 @@ public interface IMessageListener {
      * @param batch
      * @return The highest sequence number processed
      */
-    public long onBatch(ChannelHandlerContext ctx, Batch batch);
+    public int onBatch(ChannelHandlerContext ctx, Batch batch);
     /**
      * This is triggered on every new message parsed by the beats handler
      * and should be executed in the ruby world.

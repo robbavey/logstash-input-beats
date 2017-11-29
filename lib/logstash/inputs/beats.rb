@@ -42,7 +42,6 @@ require_relative "beats/patch"
 # <<plugins-codecs-multiline>> codec to handle multiline events.
 #
 class LogStash::Inputs::Beats < LogStash::Inputs::Base
-  require "logstash/inputs/beats/acking_callback"
   require "logstash/inputs/beats/codec_callback_listener"
   require "logstash/inputs/beats/event_transform_common"
   require "logstash/inputs/beats/decoded_event_transform"
