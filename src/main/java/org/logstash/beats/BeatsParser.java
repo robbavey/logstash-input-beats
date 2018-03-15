@@ -20,7 +20,7 @@ import java.util.zip.InflaterOutputStream;
 public class BeatsParser extends ByteToMessageDecoder {
     private final static Logger logger = LogManager.getLogger(BeatsParser.class);
 
-    private Batch batch;
+//    private Batch batch;
 
     private enum States {
         READ_HEADER(1),
@@ -40,10 +40,17 @@ public class BeatsParser extends ByteToMessageDecoder {
 
     }
 
+    BeatsParser(){
+        super();
+        super.setDiscardAfterReads(1);
+    }
+
     private States currentState = States.READ_HEADER;
     private int requiredBytes = 0;
     private int sequence = 0;
+    private int batchSize = 0;
 
+    private boolean ackNext = false;
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         if(!hasEnoughBytes(in)) {
@@ -55,15 +62,15 @@ public class BeatsParser extends ByteToMessageDecoder {
                 logger.trace("Running: READ_HEADER");
 
                 byte currentVersion = in.readByte();
-                if (batch == null) {
+//                if (batch == null) {
                     if (Protocol.isVersion2(currentVersion)) {
-                        batch = new V2Batch();
+//                        batch = new V2Batch();
                         logger.trace("Frame version 2 detected");
                     } else {
                         logger.trace("Frame version 1 detected");
-                        batch = new V1Batch();
+//                        batch = new V1Batch();
                     }
-                }
+//                }
                 transition(States.READ_FRAME_TYPE);
                 break;
             }
@@ -96,17 +103,18 @@ public class BeatsParser extends ByteToMessageDecoder {
             }
             case READ_WINDOW_SIZE: {
                 logger.trace("Running: READ_WINDOW_SIZE");
-                batch.setBatchSize((int) in.readUnsignedInt());
+                batchSize = (int) in.readUnsignedInt();
+//                batch.setBatchSize(batchSize);
 
                 // This is unlikely to happen but I have no way to known when a frame is
                 // actually completely done other than checking the windows and the sequence number,
                 // If the FSM read a new window and I have still
                 // events buffered I should send the current batch down to the next handler.
-                if(!batch.isEmpty()) {
-                    logger.warn("New window size received but the current batch was not complete, sending the current batch");
-                    out.add(batch);
-                    batchComplete();
-                }
+//                if(!batch.isEmpty()) {
+//                    logger.warn("New window size received but the current batch was not complete, sending the current batch");
+////                    out.add(batch);
+//                    batchComplete();
+//                }
 
                 transition(States.READ_HEADER);
                 break;
@@ -139,13 +147,20 @@ public class BeatsParser extends ByteToMessageDecoder {
 
                     count++;
                 }
+//                Message message = new Message(sequence, dataMap);
+//                ((V1Batch)batch).addMessage(message);
+//
+//                if (batch.isComplete()){
+//                    out.add(batch);
+//                    batchComplete();
+//                }
                 Message message = new Message(sequence, dataMap);
-                ((V1Batch)batch).addMessage(message);
-
-                if (batch.isComplete()){
-                    out.add(batch);
+                if (isComplete()){
+                    message.needsAck(true);
                     batchComplete();
                 }
+//                out.add(message);
+                ctx.fireChannelRead(message);
                 transition(States.READ_HEADER);
 
                 break;
@@ -192,20 +207,25 @@ public class BeatsParser extends ByteToMessageDecoder {
                 break;
             }
             case READ_JSON: {
-                logger.trace("Running: READ_JSON");
-                ((V2Batch)batch).addMessage(sequence, in, requiredBytes);
-                if(batch.isComplete()) {
+                Message message = new Message(sequence, in.slice(in.readerIndex(), requiredBytes));
+                in.skipBytes(requiredBytes);
+
+                if(isComplete()) {
                     if(logger.isTraceEnabled()) {
-                        logger.trace("Sending batch size: " + this.batch.size() + ", windowSize: " + batch.getBatchSize() + " , seq: " + sequence);
+//                        logger.trace("Sending batch size: " + this.batch.size() + ", windowSize: " + batch.getBatchSize() + " , seq: " + sequence);
                     }
-                    out.add(batch);
+                    message.needsAck(true);
                     batchComplete();
                 }
-
+                ctx.fireChannelRead(message);
                 transition(States.READ_HEADER);
                 break;
             }
         }
+    }
+
+    private boolean isComplete(){
+        return sequence >= batchSize;
     }
 
     private boolean hasEnoughBytes(ByteBuf in) {
@@ -227,7 +247,9 @@ public class BeatsParser extends ByteToMessageDecoder {
     private void batchComplete() {
         requiredBytes = 0;
         sequence = 0;
-        batch = null;
+//        batch = null;
+        ackNext = false;
+        batchSize = 0;
     }
 
     public class InvalidFrameProtocolException extends Exception {
@@ -235,5 +257,6 @@ public class BeatsParser extends ByteToMessageDecoder {
             super(message);
         }
     }
+
 
 }

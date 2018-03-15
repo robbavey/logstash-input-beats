@@ -44,6 +44,8 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
         if(logger.isDebugEnabled()) {
             logger.debug(format("Received a new payload"));
         }
+
+        logger.error("new batch is here");
         try {
             for (Message message : batch) {
                 if (logger.isDebugEnabled()) {

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,6 +17,8 @@ public class Message implements Comparable<Message> {
     private Map data;
     private Batch batch;
     private ByteBuf buffer;
+    private boolean needsAck = false;
+//    private static Logger logger = LogManager.getLogger(Message.class);
 
     public final static ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
 
@@ -35,6 +39,7 @@ public class Message implements Comparable<Message> {
      * @param buffer {@link ByteBuf} buffer containing Json object
      */
     public Message(int sequence, ByteBuf buffer){
+//        logger.error("Creating message");
         this.sequence = sequence;
         this.buffer = buffer;
     }
@@ -56,7 +61,7 @@ public class Message implements Comparable<Message> {
         if (data == null && buffer != null){
             try (ByteBufInputStream byteBufInputStream = new ByteBufInputStream(buffer)){
                 data = MAPPER.readValue((InputStream)byteBufInputStream, Map.class);
-                buffer = null;
+//                buffer = null;
             } catch (IOException e){
                 throw new RuntimeException("Unable to parse beats payload ", e);
             }
@@ -77,6 +82,18 @@ public class Message implements Comparable<Message> {
         this.batch = batch;
     }
 
+    void needsAck(boolean needsAck){
+        this.needsAck = needsAck;
+    }
+
+    boolean needsAck(){
+        return needsAck;
+    }
+
+    public void release(){
+//        logger.error("releasing buffer");
+//        buffer.release();
+    }
 
     public String getIdentityStream() {
         if (identityStream == null){

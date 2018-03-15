@@ -46,6 +46,27 @@ module LogStash module Inputs class Beats
       end
     end
 
+    def onNewByteBuf(ctx, bytebuf)
+      hash = message.getData
+      ip_address = ip_address(ctx)
+
+      hash['@metadata']['ip_address'] = ip_address unless ip_address.nil? || hash['@metadata'].nil?
+      target_field = extract_target_field(hash)
+
+      if target_field.nil?
+        event = LogStash::Event.new(hash)
+        @nocodec_transformer.transform(event)
+        @queue << event
+      else
+        codec(ctx).accept(CodecCallbackListener.new(target_field,
+                                                    hash,
+                                                    message.getIdentityStream(),
+                                                    @codec_transformer,
+                                                    @queue))
+      end
+    end
+
+
     def onNewConnection(ctx)
       register_connection(ctx)
       increment_connection_count()

@@ -1,5 +1,6 @@
 package org.logstash.beats;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 
 /**
@@ -16,6 +17,8 @@ public interface IMessageListener {
      * @param message
      */
     public void onNewMessage(ChannelHandlerContext ctx, Message message);
+
+    public void onNewByteBuf(ChannelHandlerContext ctx, ByteBuf message);
 
     /**
      * Triggered when a new client connect to the input, this is used to link a connection
