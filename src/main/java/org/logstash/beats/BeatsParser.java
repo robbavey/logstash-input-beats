@@ -21,6 +21,8 @@ public class BeatsParser extends ByteToMessageDecoder {
     private final static Logger logger = LogManager.getLogger(BeatsParser.class);
 
 //    private Batch batch;
+    private long maxDecompressed = 100_000_000l;
+    private long maxFrameSize = 10_000_000;
 
     private enum States {
         READ_HEADER(1),
@@ -49,6 +51,8 @@ public class BeatsParser extends ByteToMessageDecoder {
     private int requiredBytes = 0;
     private int sequence = 0;
     private int batchSize = 0;
+    private byte protocol;
+    private TinyBatch batch;
 
     private boolean ackNext = false;
     @Override
@@ -57,20 +61,23 @@ public class BeatsParser extends ByteToMessageDecoder {
             return;
         }
 
+        if (requiredBytes > maxFrameSize){
+            logger.error("Frame size of {}, greater than maxFrameSize of {}. Try reducing size of batches, or increasing frame size.");
+            // Clean up connection.
+            ctx.close();
+            return;
+
+        }
+
         switch (currentState) {
             case READ_HEADER: {
                 logger.trace("Running: READ_HEADER");
 
                 byte currentVersion = in.readByte();
-//                if (batch == null) {
-                    if (Protocol.isVersion2(currentVersion)) {
-//                        batch = new V2Batch();
-                        logger.trace("Frame version 2 detected");
-                    } else {
-                        logger.trace("Frame version 1 detected");
-//                        batch = new V1Batch();
-                    }
-//                }
+                if (batch == null) {
+                    protocol = currentVersion;
+                    batch = new TinyBatch(currentVersion);
+                }
                 transition(States.READ_FRAME_TYPE);
                 break;
             }
@@ -104,8 +111,16 @@ public class BeatsParser extends ByteToMessageDecoder {
             case READ_WINDOW_SIZE: {
                 logger.trace("Running: READ_WINDOW_SIZE");
                 batchSize = (int) in.readUnsignedInt();
+                //
 //                batch.setBatchSize(batchSize);
 
+                // force ack.
+                // Trigger a user event to ack last message sent
+                // triggerEvent(sequence)
+                ctx.fireUserEventTriggered(new Ack(protocol, sequence));
+//                fireUserEventTriggered(ctx, new Ack(protocol, sequence));
+
+                batchComplete();
                 // This is unlikely to happen but I have no way to known when a frame is
                 // actually completely done other than checking the windows and the sequence number,
                 // If the FSM read a new window and I have still
@@ -147,19 +162,13 @@ public class BeatsParser extends ByteToMessageDecoder {
 
                     count++;
                 }
-//                Message message = new Message(sequence, dataMap);
-//                ((V1Batch)batch).addMessage(message);
-//
-//                if (batch.isComplete()){
-//                    out.add(batch);
-//                    batchComplete();
-//                }
+
                 Message message = new Message(sequence, dataMap);
                 if (isComplete()){
                     message.needsAck(true);
                     batchComplete();
                 }
-//                out.add(message);
+                // Fire the next handler with the message received here.
                 ctx.fireChannelRead(message);
                 transition(States.READ_HEADER);
 
@@ -189,18 +198,22 @@ public class BeatsParser extends ByteToMessageDecoder {
                 logger.trace("Running: READ_COMPRESSED_FRAME");
                 // Use the compressed size as the safe start for the buffer.
                 ByteBuf buffer = ctx.alloc().buffer(requiredBytes);
+                Inflater inflater = new Inflater();
+
                 try (
                         ByteBufOutputStream buffOutput = new ByteBufOutputStream(buffer);
-                        InflaterOutputStream inflater = new InflaterOutputStream(buffOutput, new Inflater())
+                        InflaterOutputStream inflaterStream = new InflaterOutputStream(buffOutput, inflater)
                 ) {
-                    in.readBytes(inflater, requiredBytes);
+                    in.readBytes(inflaterStream, requiredBytes);
+                    logger.error("Compressed frame expanded from {} to {}", requiredBytes, buffer.readableBytes());
                     transition(States.READ_HEADER);
                     try {
-                        while (buffer.readableBytes() > 0) {
+                        while (buffer.readableBytes() > 0 ) {
                             decode(ctx, buffer, out);
                         }
                     } finally {
                         buffer.release();
+                        inflater.end();
                     }
                 }
 
@@ -210,9 +223,10 @@ public class BeatsParser extends ByteToMessageDecoder {
                 Message message = new Message(sequence, in.slice(in.readerIndex(), requiredBytes));
                 in.skipBytes(requiredBytes);
 
+
                 if(isComplete()) {
                     if(logger.isTraceEnabled()) {
-//                        logger.trace("Sending batch size: " + this.batch.size() + ", windowSize: " + batch.getBatchSize() + " , seq: " + sequence);
+                        logger.trace("Batch of size {} complete. ", sequence);
                     }
                     message.needsAck(true);
                     batchComplete();
@@ -247,7 +261,8 @@ public class BeatsParser extends ByteToMessageDecoder {
     private void batchComplete() {
         requiredBytes = 0;
         sequence = 0;
-//        batch = null;
+        protocol = '0';
+        batch = null;
         ackNext = false;
         batchSize = 0;
     }
@@ -257,6 +272,4 @@ public class BeatsParser extends ByteToMessageDecoder {
             super(message);
         }
     }
-
-
 }

@@ -18,8 +18,6 @@ public interface IMessageListener {
      */
     public void onNewMessage(ChannelHandlerContext ctx, Message message);
 
-    public void onNewByteBuf(ChannelHandlerContext ctx, ByteBuf message);
-
     /**
      * Triggered when a new client connect to the input, this is used to link a connection
      * to a codec in the ruby world.

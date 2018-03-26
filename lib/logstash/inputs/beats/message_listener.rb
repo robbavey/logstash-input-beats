@@ -53,11 +53,14 @@ module LogStash module Inputs class Beats
       hash['@metadata']['ip_address'] = ip_address unless ip_address.nil? || hash['@metadata'].nil?
       target_field = extract_target_field(hash)
 
+
+
       if target_field.nil?
         event = LogStash::Event.new(hash)
         @nocodec_transformer.transform(event)
         @queue << event
       else
+        @logger.error("Looking up codec for ctx #{ctx}")
         codec(ctx).accept(CodecCallbackListener.new(target_field,
                                                     hash,
                                                     message.getIdentityStream(),
@@ -68,11 +71,13 @@ module LogStash module Inputs class Beats
 
 
     def onNewConnection(ctx)
+      @logger.error("Registering connection #{ctx}")
       register_connection(ctx)
       increment_connection_count()
     end
 
     def onConnectionClose(ctx)
+      @logger.error("Closing connection #{ctx}")
       unregister_connection(ctx)
       decrement_connection_count()
     end

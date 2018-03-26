@@ -1,7 +1,10 @@
 package org.logstash.beats;
 
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -16,6 +19,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
@@ -34,6 +39,8 @@ public class ServerTest {
     private EventLoopGroup group;
     private final String host = "0.0.0.0";
     private final int threadCount = 10;
+    public final static ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
+
 
     @Before
     public void setUp() {
@@ -256,7 +263,7 @@ public class ServerTest {
      */
     private class DummyV1Sender extends SimpleChannelInboundHandler<String> {
         public void channelActive(ChannelHandlerContext ctx) {
-            V1Batch batch = new V1Batch();
+            V1Batch batch = new V1Batch(Protocol.VERSION_1);
             batch.setBatchSize(1);
             batch.addMessage(new Message(1, Collections.singletonMap("hello", "world")));
 
@@ -279,9 +286,9 @@ public class ServerTest {
      */
     private class DummyV2Sender extends SimpleChannelInboundHandler<String> {
         public void channelActive(ChannelHandlerContext ctx) {
-            V2Batch batch = new V2Batch();
+            V1Batch batch = new V1Batch(Protocol.VERSION_2);
             batch.setBatchSize(1);
-            ByteBuf contents = V2BatchTest.messageContents();
+            ByteBuf contents = messageContents();
             batch.addMessage(1, contents, contents.readableBytes());
 
             ctx.writeAndFlush(batch);
@@ -297,6 +304,16 @@ public class ServerTest {
         }
     }
 
+    public static ByteBuf messageContents() {
+        Map test = new HashMap();
+        test.put("key", "value");
+        try {
+            byte[] bytes = MAPPER.writeValueAsBytes(test);
+            return Unpooled.wrappedBuffer(bytes);
+        } catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
 
     /**
      *  Used to assert the number of messages send to the server

@@ -18,6 +18,7 @@ public class Message implements Comparable<Message> {
     private Batch batch;
     private ByteBuf buffer;
     private boolean needsAck = false;
+    private byte ack = '0';
 //    private static Logger logger = LogManager.getLogger(Message.class);
 
     public final static ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
@@ -88,6 +89,14 @@ public class Message implements Comparable<Message> {
 
     boolean needsAck(){
         return needsAck;
+    }
+
+    void setAckByte(byte protocol){
+        ack = protocol;
+    }
+
+    byte getAckByte(){
+        return ack;
     }
 
     public void release(){
