@@ -1,48 +1,55 @@
 package org.logstash.beats;
 
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+
 /**
  * Interface representing a Batch of {@link Message}.
  */
-public interface Batch extends Iterable<Message>{
-    /**
-     * Returns the protocol of the sent messages that this batch was constructed from
-     * @return byte - either '1' or '2'
-     */
-    byte getProtocol();
+public class Batch implements Iterable<Message>{
 
-    /**
-     * Number of messages that the batch is expected to contain.
-     * @return int  - number of messages
-     */
-    int getBatchSize();
+    private final byte protocol;
+    private int batchSize = 0;
+    private List<Message> messages = new LinkedList<>();
 
-    /**
-     * Set the number of messages that the batch is expected to contain.
-     * @param batchSize int - number of messages
-     */
-    void setBatchSize(int batchSize);
+    public Batch(byte protocol){
+        this.protocol = protocol;
+    }
 
-    /**
-     * Current number of messages in the batch
-     * @return int
-     */
-    int size();
+    public byte getProtocol(){
+        return protocol;
+    }
 
-    /**
-     * Is the batch currently empty?
-     * @return boolean
-     */
-    boolean isEmpty();
+    public void setBatchSize(int batchSize){
+        this.batchSize = batchSize;
+    }
 
-    /**
-     * Is the batch complete?
-     * @return boolean
-     */
-    boolean isComplete();
+    public int getBatchSize(){
+        return batchSize;
+    }
 
-    /**
-     * Release the resources associated with the batch. Consumers of the batch *must* release
-     * after use.
-     */
-    void release();
+    public int size(){
+        return messages.size();
+    }
+
+    public void addMessage(Message message){
+        messages.add(message);
+    }
+
+    public boolean isEmpty(){
+        return messages.isEmpty();
+    }
+
+    public void release(){
+        messages.forEach(Message::release);
+    }
+
+    public Iterator<Message> iterator(){
+        return messages.iterator();
+    }
+
+    public boolean isComplete(){
+        return messages.size() == batchSize;
+    }
 }

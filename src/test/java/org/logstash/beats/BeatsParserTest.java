@@ -5,94 +5,37 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.embedded.EmbeddedChannel;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.Matchers.isA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 
 
 public class BeatsParserTest {
+    private Batch v1Batch;
+    private Batch v2Batch;
     public final static ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
 
-    private V1Batch v1Batch;
-    private V1Batch v2Batch;
     private final int numberOfMessage = 20;
 
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
-    private class SpyListener implements IMessageListener {
-        private boolean onNewConnectionCalled = false;
-        private boolean onNewMessageCalled = false;
-        private boolean onConnectionCloseCalled = false;
-        private boolean onExceptionCalled = false;
-        private final List<Message> lastMessages = new ArrayList<Message>();
-
-        @Override
-        public void onNewMessage(ChannelHandlerContext ctx, Message message) {
-            onNewMessageCalled = true;
-            lastMessages.add(message);
-            message.getData();
-        }
-
-        @Override
-        public void onNewConnection(ChannelHandlerContext ctx) {
-            ctx.channel().attr(ConnectionHandler.CHANNEL_SEND_KEEP_ALIVE).set(new AtomicBoolean(false));
-            onNewConnectionCalled = true;
-        }
-
-        @Override
-        public void onConnectionClose(ChannelHandlerContext ctx) {
-            onConnectionCloseCalled = true;
-        }
-
-        @Override
-        public void onException(ChannelHandlerContext ctx, Throwable cause) { onExceptionCalled = true; }
-
-        @Override
-        public void onChannelInitializeException(ChannelHandlerContext ctx, Throwable cause) {
-        }
-
-        public boolean isOnNewConnectionCalled() {
-            return onNewConnectionCalled;
-        }
-
-        public boolean isOnNewMessageCalled() {
-            return onNewMessageCalled;
-        }
-
-        public boolean isOnConnectionCloseCalled() {
-            return onConnectionCloseCalled;
-        }
-
-        public List<Message> getLastMessages() {
-            return lastMessages;
-        }
-
-        public boolean isOnExceptionCalled() {
-            return onExceptionCalled;
-        }
-    }
 
     @Before
     public void setup() throws Exception{
-        this.v1Batch = new V1Batch(Protocol.VERSION_1);
+        this.v1Batch = new Batch(Protocol.VERSION_1);
 
         for(int i = 1; i <= numberOfMessage; i++) {
             Map map = new HashMap<String, String>();
@@ -103,7 +46,7 @@ public class BeatsParserTest {
             this.v1Batch.addMessage(message);
         }
 
-        this.v2Batch = new V1Batch(Protocol.VERSION_2);
+        this.v2Batch = new Batch(Protocol.VERSION_2);
 
         for(int i = 1; i <= numberOfMessage; i++) {
             Map map = new HashMap<String, String>();
@@ -113,65 +56,43 @@ public class BeatsParserTest {
             Message message = new Message(i, map);
             this.v2Batch.addMessage(message);
         }
-
-//        this.v2Batch = new V1Batch(Protocol.VERSION_2);
-
-//        for(int i = 1; i <= numberOfMessage; i++) {
-//            Map map = new HashMap<String, String>();
-//            map.put("line", "Another world");
-//            map.put("from", "Little big Adventure");
-//            ByteBuf bytebuf = Unpooled.wrappedBuffer(MAPPER.writeValueAsBytes(map));
-//            this.v2Batch.addMessage(i, bytebuf, bytebuf.readableBytes());
-//        }
-
     }
 
     @Test
     public void testEncodingDecodingJson() {
-//        List<Message> decodedBatch = decodeBatch(v2Batch);
-//        assertMessages(v1Batch, decodedBatch);
+        Batch decodedBatch = decodeBatch(v1Batch);
+        assertMessages(v1Batch, decodedBatch);
     }
 
     @Test
     public void testCompressedEncodingDecodingJson() {
-//        List<Message> decodedBatch = decodeCompressedBatch(v2Batch);
-//        assertMessages(v1Batch, decodedBatch);
+        Batch decodedBatch = decodeCompressedBatch(v1Batch);
+        assertMessages(v1Batch, decodedBatch);
     }
 
     @Test
     public void testEncodingDecodingFields() {
-//        List<Message> decodedBatch = decodeBatch(v2Batch);
-//        assertMessages(v1Batch, decodedBatch);
+        Batch decodedBatch = decodeBatch(v1Batch);
+        assertMessages(v1Batch, decodedBatch);
     }
 
     @Test
     public void testEncodingDecodingFieldWithUTFCharacters() throws Exception {
-        V1Batch v2Batch = new V1Batch(Protocol.VERSION_2);
-        ByteBuf payload = Unpooled.buffer();
-
+        Batch v2Batch = new Batch(Protocol.VERSION_2);
         // Generate Data with Keys and String with UTF-8
         for(int i = 0; i < numberOfMessage; i++) {
-
-
             Map map = new HashMap<String, String>();
             map.put("étoile", "mystère");
             map.put("from", "ÉeèAççï");
             v2Batch.addMessage(new Message(i, map));
         }
-
-        SpyListener spyListener = new SpyListener();
-        EmbeddedChannel channel = new EmbeddedChannel(new CompressedBatchEncoder(), new BeatsParser(), new BeatsMessageHandler(spyListener));
-
-
-//            List<Message> decodedBatch =
-                    decodeBatch(v2Batch, channel);
-            assertMessages(v2Batch, spyListener.getLastMessages());
-
+        Batch decodedBatch = decodeBatch(v2Batch);
+        assertMessages(v2Batch, decodedBatch);
     }
 
     @Test
     public void testV1EncodingDecodingFieldWithUTFCharacters() {
-        V1Batch batch = new V1Batch(Protocol.VERSION_1);
+        Batch batch = new Batch(Protocol.VERSION_1);
 
         // Generate Data with Keys and String with UTF-8
         for(int i = 0; i < numberOfMessage; i++) {
@@ -183,14 +104,14 @@ public class BeatsParserTest {
             Message message = new Message(i + 1, map);
             batch.addMessage(message);
         }
-        SpyListener spyListener = new SpyListener();
-        decodeBatch(batch, spyListener);
-        assertMessages(batch, spyListener.getLastMessages());
+
+        Batch decodedBatch = decodeBatch(batch);
+        assertMessages(batch, decodedBatch);
     }
 
     @Test
     public void testCompressedEncodingDecodingFields() {
-        List<Message> decodedBatch = decodeCompressedBatch(v1Batch);
+        Batch decodedBatch = decodeCompressedBatch(v1Batch);
         assertEquals(decodedBatch.size(), numberOfMessage);
         assertMessages(this.v1Batch, decodedBatch);
     }
@@ -281,7 +202,7 @@ public class BeatsParserTest {
         channel.writeInbound(o);
     }
 
-    private void assertMessages(Batch expected, List<Message> actual) {
+    private void assertMessages(Batch expected, Batch actual) {
 
         assertNotNull(actual);
         assertEquals(expected.size(), actual.size());
@@ -291,6 +212,7 @@ public class BeatsParserTest {
         for(Message actualMessage: actual) {
             Message expectedMessage = expectedMessages.next();
             assertEquals(expectedMessage.getSequence(), actualMessage.getSequence());
+
             Map expectedData = expectedMessage.getData();
             Map actualData = actualMessage.getData();
 
@@ -303,60 +225,23 @@ public class BeatsParserTest {
 
                 assertEquals(value, actualData.get(key));
             }
-            i++;
         }
     }
 
-//    private Batch decodeCompressedBatch(Batch batch) {
-//        EmbeddedChannel channel = new EmbeddedChannel(new CompressedBatchEncoder(), new BeatsParser());
-//        channel.writeOutbound(batch);
-//        Object o = channel.readOutbound();
-//        channel.writeInbound(o);
-//
-//        return (Batch) channel.readInbound();
-//    }
 
-    private List<Message> decodeCompressedBatch(Batch batch) {
-        EmbeddedChannel channel = new EmbeddedChannel(new CompressedBatchEncoder(), new BeatsParser());
-        channel.writeOutbound(batch);
-        Object o = channel.readOutbound();
-        channel.writeInbound(o);
-        List<Message> messages = new ArrayList<>();
-        Message next = channel.readInbound();
-        next.getData();
-        while (next != null){
-            messages.add(next);
-            next = channel.readInbound();
-        }
-        return messages;
+    private Batch decodeCompressedBatch(Batch batch) {
+        return decodeBatch(batch, new EmbeddedChannel(new CompressedBatchEncoder(), new BeatsParser()));
     }
 
-    private List<Message> decodeBatch(Batch batch, EmbeddedChannel channel) {
-//        EmbeddedChannel channel = new EmbeddedChannel(new CompressedBatchEncoder(), new BeatsParser());
-        channel.writeOutbound(batch);
-        Object o = channel.readOutbound();
-        channel.writeInbound(o);
-        List<Message> messages = new ArrayList<>();
-        Message next = channel.readInbound();
-        while (next != null){
-            messages.add(next);
-            next = channel.readInbound();
-        }
-        return messages;
+    private Batch decodeBatch(Batch batch) {
+        return decodeBatch(batch, new EmbeddedChannel(new BatchEncoder(), new BeatsParser()));
     }
 
-
-    private List<Message> decodeBatch(Batch batch, IMessageListener spyListener) {
-        EmbeddedChannel channel = new EmbeddedChannel(new BatchEncoder(), new BeatsParser(), new BeatsMessageHandler(spyListener));
-        channel.writeOutbound(batch);
-        Object o = channel.readOutbound();
-        channel.writeInbound(o);
-        List<Message> messages = new ArrayList<>();
-        Message next = channel.readInbound();
-        while (next != null){
-            messages.add(next);
-            next = channel.readInbound();
-        }
-        return messages;
+    private Batch decodeBatch(Batch batch, EmbeddedChannel encodingChannel) {
+        encodingChannel.writeOutbound(batch);
+        Object o = encodingChannel.readOutbound();
+        encodingChannel.writeInbound(o);
+        return (Batch) encodingChannel.readInbound();
     }
+
 }

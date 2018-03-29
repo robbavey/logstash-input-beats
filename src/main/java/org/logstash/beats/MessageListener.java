@@ -1,6 +1,5 @@
 package org.logstash.beats;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -27,7 +26,6 @@ public class MessageListener implements IMessageListener {
         logger.debug("onNewMessage");
     }
 
-    public void onNewByteBuf(ChannelHandlerContext ctx, ByteBuf message){}
     /**
      * Triggered when a new client connect to the input, this is used to link a connection
      * to a codec in the ruby world.

@@ -67,7 +67,6 @@ public class ConnectionHandler extends ChannelDuplexHandler {
             e = (IdleStateEvent) evt;
             if (e.state() == IdleState.WRITER_IDLE) {
                 if (sendKeepAlive(ctx)) {
-                    logger.error("Send keep alive");
                     ChannelFuture f = ctx.writeAndFlush(new Ack(Protocol.VERSION_2, 0));
                     if (logger.isTraceEnabled()) {
                         logger.trace("{}: sending keep alive ack to libbeat", ctx.channel().id().asShortText());

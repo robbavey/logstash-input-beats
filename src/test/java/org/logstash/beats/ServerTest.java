@@ -263,7 +263,7 @@ public class ServerTest {
      */
     private class DummyV1Sender extends SimpleChannelInboundHandler<String> {
         public void channelActive(ChannelHandlerContext ctx) {
-            V1Batch batch = new V1Batch(Protocol.VERSION_1);
+            Batch batch = new Batch(Protocol.VERSION_1);
             batch.setBatchSize(1);
             batch.addMessage(new Message(1, Collections.singletonMap("hello", "world")));
 
@@ -286,10 +286,12 @@ public class ServerTest {
      */
     private class DummyV2Sender extends SimpleChannelInboundHandler<String> {
         public void channelActive(ChannelHandlerContext ctx) {
-            V1Batch batch = new V1Batch(Protocol.VERSION_2);
+            Batch batch = new Batch(Protocol.VERSION_2);
             batch.setBatchSize(1);
             ByteBuf contents = messageContents();
-            batch.addMessage(1, contents, contents.readableBytes());
+            batch.addMessage(new Message(1, Collections.singletonMap("hello", "world")));
+
+//            batch.addMessage(1, contents, contents.readableBytes());
 
             ctx.writeAndFlush(batch);
         }

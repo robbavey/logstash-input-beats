@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,11 +13,7 @@ public class Message implements Comparable<Message> {
     private final int sequence;
     private String identityStream;
     private Map data;
-    private Batch batch;
     private ByteBuf buffer;
-    private boolean needsAck = false;
-    private byte ack = '0';
-//    private static Logger logger = LogManager.getLogger(Message.class);
 
     public final static ObjectMapper MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
 
@@ -40,7 +34,6 @@ public class Message implements Comparable<Message> {
      * @param buffer {@link ByteBuf} buffer containing Json object
      */
     public Message(int sequence, ByteBuf buffer){
-//        logger.error("Creating message");
         this.sequence = sequence;
         this.buffer = buffer;
     }
@@ -62,7 +55,8 @@ public class Message implements Comparable<Message> {
         if (data == null && buffer != null){
             try (ByteBufInputStream byteBufInputStream = new ByteBufInputStream(buffer)){
                 data = MAPPER.readValue((InputStream)byteBufInputStream, Map.class);
-//                buffer = null;
+                buffer.release();
+                buffer = null;
             } catch (IOException e){
                 throw new RuntimeException("Unable to parse beats payload ", e);
             }
@@ -75,33 +69,10 @@ public class Message implements Comparable<Message> {
         return Integer.compare(getSequence(), o.getSequence());
     }
 
-    public Batch getBatch(){
-        return batch;
-    }
-
-    public void setBatch(Batch batch){
-        this.batch = batch;
-    }
-
-    void needsAck(boolean needsAck){
-        this.needsAck = needsAck;
-    }
-
-    boolean needsAck(){
-        return needsAck;
-    }
-
-    void setAckByte(byte protocol){
-        ack = protocol;
-    }
-
-    byte getAckByte(){
-        return ack;
-    }
-
     public void release(){
-//        logger.error("releasing buffer");
-//        buffer.release();
+        if (buffer != null && buffer.refCnt() > 0) {
+            buffer.release();
+        }
     }
 
     public String getIdentityStream() {

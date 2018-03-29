@@ -19,7 +19,7 @@ import static org.junit.Assert.assertTrue;
 public class BeatsHandlerTest {
     private SpyListener spyListener;
     private BeatsHandler beatsHandler;
-    private V1Batch batch;
+    private Batch batch;
 
     private class SpyListener implements IMessageListener {
         private boolean onNewConnectionCalled = false;
@@ -81,7 +81,7 @@ public class BeatsHandlerTest {
         Message message1 = new Message(1, new HashMap());
         Message message2 = new Message(2, new HashMap());
 
-        batch = new V1Batch(Protocol.VERSION_2);
+        batch = new Batch(Protocol.VERSION_2);
         batch.setBatchSize(2);
         batch.addMessage(message1);
         batch.addMessage(message2);

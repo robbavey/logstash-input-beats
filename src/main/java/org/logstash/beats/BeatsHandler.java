@@ -2,12 +2,12 @@ package org.logstash.beats;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.util.AttributeKey;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.net.InetSocketAddress;
 import javax.net.ssl.SSLHandshakeException;
+
 
 public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
     private final static Logger logger = LogManager.getLogger(BeatsHandler.class);
@@ -45,16 +45,19 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
             logger.debug(format("Received a new payload"));
         }
 
-        logger.error("new batch is here");
         try {
             for (Message message : batch) {
                 if (logger.isDebugEnabled()) {
                     logger.debug(format("Sending a new message for the listener, sequence: " + message.getSequence()));
                 }
-                messageListener.onNewMessage(ctx, message);
+                try {
+                    messageListener.onNewMessage(ctx, message);
+                }finally{
+                    message.release();
+                }
 
-                if (needAck(message)) {
-                    ack(ctx, message);
+                if (needAck(batch, message)) {
+                    ack(ctx, message, batch.getProtocol());
                 }
             }
         }finally{
@@ -63,7 +66,6 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
             if (logger.isDebugEnabled()) {
                 logger.debug("{}: batches pending: {}", ctx.channel().id().asShortText(),ctx.channel().attr(ConnectionHandler.CHANNEL_SEND_KEEP_ALIVE).get().get());
             }
-            batch.release();
             ctx.flush();
         }
     }
@@ -96,15 +98,15 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
         }
     }
 
-    private boolean needAck(Message message) {
-        return message.getSequence() == message.getBatch().getBatchSize();
+    private boolean needAck(Batch batch, Message message) {
+        return message.getSequence() == batch.size();
     }
 
-    private void ack(ChannelHandlerContext ctx, Message message) {
+    private void ack(ChannelHandlerContext ctx, Message message, byte protocol) {
         if (logger.isTraceEnabled()){
             logger.trace(format("Acking message number " + message.getSequence()));
         }
-        writeAck(ctx, message.getBatch().getProtocol(), message.getSequence());
+        writeAck(ctx, protocol, message.getSequence());
     }
 
     private void writeAck(ChannelHandlerContext ctx, byte protocol, int sequence) {
