@@ -18,7 +18,6 @@ import static org.junit.Assert.assertTrue;
  */
 public class BeatsHandlerTest {
     private SpyListener spyListener;
-    private BeatsHandler beatsHandler;
     private V1Batch batch;
 
     private class SpyListener implements IMessageListener {
@@ -76,7 +75,6 @@ public class BeatsHandlerTest {
     @Before
     public void setup() {
         spyListener = new SpyListener();
-        beatsHandler = new BeatsHandler(spyListener);
 
         Message message1 = new Message(1, new HashMap());
         Message message2 = new Message(2, new HashMap());
@@ -90,7 +88,7 @@ public class BeatsHandlerTest {
 
     @Test
     public void TestItCalledOnNewConnectionOnListenerWhenHandlerIsAdded() {
-        EmbeddedChannel embeddedChannel = new EmbeddedChannel(new BeatsHandler(spyListener));
+        EmbeddedChannel embeddedChannel = new EmbeddedChannel(new BeatsHandler(spyListener, new BatchTracker()));
         embeddedChannel.writeInbound(batch);
 
         assertTrue(spyListener.isOnNewConnectionCalled());
@@ -99,7 +97,7 @@ public class BeatsHandlerTest {
 
     @Test
     public void TestItCalledOnConnectionCloseOnListenerWhenChannelIsRemoved() {
-        EmbeddedChannel embeddedChannel = new EmbeddedChannel(new BeatsHandler(spyListener));
+        EmbeddedChannel embeddedChannel = new EmbeddedChannel(new BeatsHandler(spyListener, new BatchTracker()));
         embeddedChannel.writeInbound(batch);
         embeddedChannel.close();
 
@@ -108,7 +106,7 @@ public class BeatsHandlerTest {
 
     @Test
     public void TestIsCallingNewMessageOnEveryMessage() {
-        EmbeddedChannel embeddedChannel = new EmbeddedChannel(new BeatsHandler(spyListener));
+        EmbeddedChannel embeddedChannel = new EmbeddedChannel(new BeatsHandler(spyListener, new BatchTracker()));
         embeddedChannel.writeInbound(batch);
 
 
@@ -118,7 +116,7 @@ public class BeatsHandlerTest {
 
     @Test
     public void TestItAckLastMessageFromBatch() {
-        EmbeddedChannel embeddedChannel = new EmbeddedChannel(new BeatsHandler(spyListener));
+        EmbeddedChannel embeddedChannel = new EmbeddedChannel(new BeatsHandler(spyListener, new BatchTracker()));
         embeddedChannel.writeInbound(batch);
 
         embeddedChannel.close();

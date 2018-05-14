@@ -122,6 +122,9 @@ class LogStash::Inputs::Beats < LogStash::Inputs::Base
   # Beats handler executor thread
   config :executor_threads, :validate => :number, :default => LogStash::Config::CpuCoreStrategy.maximum
 
+  # Maximum number of batches in flight
+  config :max_pending_batches, :validate => :number, :default => LogStash::Config::CpuCoreStrategy.maximum * 2
+
   def register
     # For Logstash 2.4 we need to make sure that the logger is correctly set for the
     # java classes before actually loading them.
@@ -159,7 +162,7 @@ class LogStash::Inputs::Beats < LogStash::Inputs::Base
   end # def register
 
   def create_server
-    server = org.logstash.beats.Server.new(@host, @port, @client_inactivity_timeout, @executor_threads)
+    server = org.logstash.beats.Server.new(@host, @port, @client_inactivity_timeout, @executor_threads, @max_pending_batches)
     if @ssl
 
       begin

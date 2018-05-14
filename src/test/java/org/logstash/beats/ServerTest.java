@@ -15,6 +15,7 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
@@ -22,6 +23,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 
 import static java.lang.Thread.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -233,20 +235,122 @@ public class ServerTest {
 
     }
 
+    @Test
+    public void testServerShouldRejectConnectionsIfTooManyBatchesInFlight() throws InterruptedException {
+        int inactivityTime = 5; // in seconds
+        SecureRandom randomizer = new SecureRandom();
+        int maxBatches = randomizer.nextInt(10) + 1;
+        int totalConnections = randomizer.nextInt(10) + maxBatches + 1;
+        CountDownLatch batchesReceived = new CountDownLatch(maxBatches);
+        CountDownLatch unregistered = new CountDownLatch(totalConnections);
+        CountDownLatch finished = new CountDownLatch(1);
+        final LongAdder connected = new LongAdder();
+        final AtomicBoolean exceptionClose = new AtomicBoolean(false);
+        final Server server = new Server(host, randomPort, inactivityTime, threadCount, maxBatches);
+
+        try {
+            server.setMessageListener(new MessageListener() {
+                @Override
+                public void onNewConnection(ChannelHandlerContext ctx) {
+                    connected.increment();
+                }
+
+                @Override
+                public void onConnectionClose(ChannelHandlerContext ctx) {
+                }
+
+                @Override
+                public void onNewMessage(ChannelHandlerContext ctx, Message message) {
+                    try {
+                        batchesReceived.countDown();
+                        // Block on new message arriving to simulate Logstash backing up.
+                        finished.await();
+                    } catch (InterruptedException e) {
+                        //ignore
+                    }
+                }
+
+                @Override
+                public void onException(ChannelHandlerContext ctx, Throwable cause) {
+                    exceptionClose.set(true);
+                }
+            });
+
+            Runnable serverTask = new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        server.listen();
+                    } catch (InterruptedException e) {
+                        //ignore
+                    }
+                }
+            };
+
+            Thread thread = new Thread(serverTask);
+            thread.start();
+            sleep(1000); // give some time to travis..
+
+            for (int i = 0; i < maxBatches; i++) {
+                Runnable clientTask = new Runnable() {
+
+                    @Override
+                    public void run() {
+                        try {
+                            connectClient(unregistered);
+                        } catch (InterruptedException e) {
+                            //ignore
+                        }
+                    }
+                };
+
+                new Thread(clientTask).start();
+            }
+
+            assertThat(batchesReceived.await(10, TimeUnit.SECONDS), is(true));
+
+            for (int i = 0; i < totalConnections - maxBatches; i++) {
+                Runnable clientTask = new Runnable() {
+
+                    @Override
+                    public void run() {
+                        try {
+                            connectClient(unregistered);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                };
+
+                new Thread(clientTask).start();
+            }
+
+            // Wait for all clients to be unregistered
+            assertThat(unregistered.await(10, TimeUnit.SECONDS), is(true));
+            // assert that only maxBatches were connected successfully.
+            assertThat(connected.intValue(), is(maxBatches));
+        }
+        finally{
+            finished.countDown();
+        }
+    }
+
     public ChannelFuture connectClient() throws InterruptedException {
-            Bootstrap b = new Bootstrap();
-            b.group(group)
-                    .channel(NioSocketChannel.class)
-                    .handler(new ChannelInitializer<SocketChannel>() {
-                                 @Override
-                                 public void initChannel(SocketChannel ch) throws Exception {
-                                     ChannelPipeline pipeline = ch.pipeline();
-                                     pipeline.addLast(new BatchEncoder());
-                                     pipeline.addLast(new DummyV2Sender());
-                                 }
-                             }
-                    );
-            return b.connect("localhost", randomPort);
+        return connectClient(null);
+    }
+
+    public ChannelFuture connectClient(CountDownLatch latch) throws InterruptedException {
+        Bootstrap b = new Bootstrap();
+        b.group(group)
+                .channel(NioSocketChannel.class)
+                .handler(new ChannelInitializer<SocketChannel>() {
+                    @Override
+                    public void initChannel(SocketChannel ch) throws Exception {
+                        ChannelPipeline pipeline = ch.pipeline();
+                        pipeline.addLast(new BatchEncoder());
+                        pipeline.addLast(new DummyV2Sender(latch));
+                    }});
+        return b.connect("localhost", randomPort);
     }
 
 
@@ -278,6 +382,12 @@ public class ServerTest {
      *
      */
     private class DummyV2Sender extends SimpleChannelInboundHandler<String> {
+        private CountDownLatch unregisteredLatch;
+
+        DummyV2Sender(CountDownLatch unregisteredLatch){
+            this.unregisteredLatch = unregisteredLatch;
+        }
+
         public void channelActive(ChannelHandlerContext ctx) {
             V2Batch batch = new V2Batch();
             batch.setBatchSize(1);
@@ -289,6 +399,12 @@ public class ServerTest {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, String msg) throws Exception {
+        }
+
+        @Override
+        public void channelUnregistered(final ChannelHandlerContext ctx) throws Exception {
+            unregisteredLatch.countDown();
+            super.channelUnregistered(ctx);
         }
 
         @Override

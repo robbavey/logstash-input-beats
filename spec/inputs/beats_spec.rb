@@ -16,16 +16,17 @@ describe LogStash::Inputs::Beats do
 
   context "#register" do
     context "host related configuration" do
-      let(:config) { super.merge!({ "host" => host, "port" => port, "client_inactivity_timeout" => client_inactivity_timeout, "executor_threads" => threads }) }
+      let(:config) { super.merge!({ "host" => host, "port" => port, "client_inactivity_timeout" => client_inactivity_timeout, "executor_threads" => threads, "max_pending_batches" => max_pending_batches }) }
       let(:host) { "192.168.1.20" }
       let(:port) { 9000 }
       let(:client_inactivity_timeout) { 400 }
+      let (:max_pending_batches) { 32 }
       let(:threads) { 10 }
 
       subject(:plugin) { LogStash::Inputs::Beats.new(config) }
 
       it "sends the required options to the server" do
-        expect(org.logstash.beats.Server).to receive(:new).with(host, port, client_inactivity_timeout, threads)
+        expect(org.logstash.beats.Server).to receive(:new).with(host, port, client_inactivity_timeout, threads, max_pending_batches)
         subject.register
       end
     end

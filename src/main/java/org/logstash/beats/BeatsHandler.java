@@ -2,25 +2,29 @@ package org.logstash.beats;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.util.AttributeKey;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.net.ssl.SSLHandshakeException;
 
 public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
     private final static Logger logger = LogManager.getLogger(BeatsHandler.class);
     private final IMessageListener messageListener;
     private ChannelHandlerContext context;
+    private BatchTracker tracker;
+    private AtomicBoolean active = new AtomicBoolean(false);
 
 
-    public BeatsHandler(IMessageListener listener) {
+    public BeatsHandler(IMessageListener listener, BatchTracker tracker) {
         messageListener = listener;
+        this.tracker = tracker;
     }
 
     @Override
     public void channelActive(final ChannelHandlerContext ctx) throws Exception {
+        active.set(true);
 	    context = ctx;
         if (logger.isTraceEnabled()){
             logger.trace(format("Channel Active"));
@@ -35,9 +39,11 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
         if (logger.isTraceEnabled()){
             logger.trace(format("Channel Inactive"));
         }
-        messageListener.onConnectionClose(ctx);
-    }
 
+        if (active.get()) {
+            messageListener.onConnectionClose(ctx);
+        }
+    }
 
     @Override
     public void channelRead0(ChannelHandlerContext ctx, Batch batch) throws Exception {
@@ -57,6 +63,7 @@ public class BeatsHandler extends SimpleChannelInboundHandler<Batch> {
             }
         }finally{
             //this channel is done processing this payload, instruct the connection handler to stop sending TCP keep alive
+            tracker.batchCompleted();
             ctx.channel().attr(ConnectionHandler.CHANNEL_SEND_KEEP_ALIVE).get().set(false);
             if (logger.isDebugEnabled()) {
                 logger.debug("{}: batches pending: {}", ctx.channel().id().asShortText(),ctx.channel().attr(ConnectionHandler.CHANNEL_SEND_KEEP_ALIVE).get().get());

@@ -117,6 +117,14 @@ The IP address to listen on.
   * Value type is <<boolean,boolean>>
   * Default value is `true`
 
+[id="plugins-{type}s-{plugin}-max_pending_batches"]
+==== `max_pending_batches`
+
+  * Value type is <<number,number>>
+  * Default value for this setting is 2*number of cores on this machine.
+
+Will refuse new connections when the number of batches being processed by this plugin exceeds this number. Does not affect processing of beats clients currently connected.
+
 
 
 [id="plugins-{type}s-{plugin}-port"]

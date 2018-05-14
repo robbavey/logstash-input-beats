@@ -21,6 +21,7 @@ public class BeatsParser extends ByteToMessageDecoder {
     private final static Logger logger = LogManager.getLogger(BeatsParser.class);
 
     private Batch batch;
+    private BatchTracker tracker;
 
     private enum States {
         READ_HEADER(1),
@@ -44,6 +45,10 @@ public class BeatsParser extends ByteToMessageDecoder {
     private int requiredBytes = 0;
     private int sequence = 0;
 
+
+    BeatsParser(BatchTracker tracker){
+        this.tracker = tracker;
+    }
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         if(!hasEnoughBytes(in)) {
@@ -53,7 +58,6 @@ public class BeatsParser extends ByteToMessageDecoder {
         switch (currentState) {
             case READ_HEADER: {
                 logger.trace("Running: READ_HEADER");
-
                 byte currentVersion = in.readByte();
                 if (batch == null) {
                     if (Protocol.isVersion2(currentVersion)) {
@@ -63,6 +67,7 @@ public class BeatsParser extends ByteToMessageDecoder {
                         logger.trace("Frame version 1 detected");
                         batch = new V1Batch();
                     }
+                    tracker.batchStarted();
                 }
                 transition(States.READ_FRAME_TYPE);
                 break;

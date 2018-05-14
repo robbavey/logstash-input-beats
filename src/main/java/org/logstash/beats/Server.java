@@ -23,6 +23,8 @@ public class Server {
     private final int port;
     private final String host;
     private final int beatsHeandlerThreadCount;
+    private final int maxInflightBatches;
+    private NioEventLoopGroup bossGroup;
     private NioEventLoopGroup workGroup;
     private IMessageListener messageListener = new MessageListener();
     private SslSimpleBuilder sslBuilder;
@@ -31,10 +33,15 @@ public class Server {
     private final int clientInactivityTimeoutSeconds;
 
     public Server(String host, int p, int timeout, int threadCount) {
+        this(host, p, timeout, threadCount, threadCount);
+    }
+
+    public Server(String host, int p, int timeout, int threadCount, int maxInflightBatches) {
         this.host = host;
         port = p;
         clientInactivityTimeoutSeconds = timeout;
         beatsHeandlerThreadCount = threadCount;
+        this.maxInflightBatches = maxInflightBatches;
     }
 
     public void enableSSL(SslSimpleBuilder builder) {
@@ -42,6 +49,15 @@ public class Server {
     }
 
     public Server listen() throws InterruptedException {
+        if (bossGroup != null) {
+            try {
+                logger.debug("Shutting down existing boss group before starting");
+                bossGroup.shutdownGracefully().sync();
+            } catch (Exception e) {
+                logger.error("Could not shut down boss group before starting", e);
+            }
+        }
+        bossGroup = new NioEventLoopGroup(1);
         if (workGroup != null) {
             try {
                 logger.debug("Shutting down existing worker group before starting");
@@ -57,7 +73,7 @@ public class Server {
             beatsInitializer = new BeatsInitializer(isSslEnable(), messageListener, clientInactivityTimeoutSeconds, beatsHeandlerThreadCount);
 
             ServerBootstrap server = new ServerBootstrap();
-            server.group(workGroup)
+            server.group(bossGroup, workGroup)
                     .channel(NioServerSocketChannel.class)
                     .childOption(ChannelOption.SO_LINGER, 0) // Since the protocol doesn't support yet a remote close from the server and we don't want to have 'unclosed' socket lying around we have to use `SO_LINGER` to force the close of the socket.
                     .childHandler(beatsInitializer);
@@ -79,6 +95,9 @@ public class Server {
 
     private void shutdown(){
         try {
+            if (bossGroup != null) {
+                bossGroup.shutdownGracefully().sync();
+            }
             if (workGroup != null) {
                 workGroup.shutdownGracefully().sync();
             }
@@ -114,6 +133,7 @@ public class Server {
         private int clientInactivityTimeoutSeconds;
 
         private boolean enableSSL = false;
+        private BatchTracker tracker = null;
 
         public BeatsInitializer(Boolean secure, IMessageListener messageListener, int clientInactivityTimeoutSeconds, int beatsHandlerThread) {
             enableSSL = secure;
@@ -121,11 +141,12 @@ public class Server {
             this.clientInactivityTimeoutSeconds = clientInactivityTimeoutSeconds;
             idleExecutorGroup = new DefaultEventExecutorGroup(DEFAULT_IDLESTATEHANDLER_THREAD);
             beatsHandlerExecutorGroup = new DefaultEventExecutorGroup(beatsHandlerThread);
-
+            tracker = new BatchTracker();
         }
 
         public void initChannel(SocketChannel socket) throws IOException, NoSuchAlgorithmException, CertificateException {
             ChannelPipeline pipeline = socket.pipeline();
+            pipeline.addFirst(new TooManyBatchesFilter(tracker, maxInflightBatches));
 
             if(enableSSL) {
                 SslHandler sslHandler = sslBuilder.build(socket.alloc());
@@ -134,7 +155,8 @@ public class Server {
             pipeline.addLast(idleExecutorGroup, IDLESTATE_HANDLER, new IdleStateHandler(clientInactivityTimeoutSeconds, IDLESTATE_WRITER_IDLE_TIME_SECONDS , clientInactivityTimeoutSeconds));
             pipeline.addLast(BEATS_ACKER, new AckEncoder());
             pipeline.addLast(CONNECTION_HANDLER, new ConnectionHandler());
-            pipeline.addLast(beatsHandlerExecutorGroup, new BeatsParser(), new BeatsHandler(this.message));
+            pipeline.addLast("BeatsParser", new BeatsParser(tracker));
+            pipeline.addLast(beatsHandlerExecutorGroup, new BeatsHandler(this.message, tracker));
         }
 
         @Override

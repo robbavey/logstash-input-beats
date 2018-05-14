@@ -204,7 +204,7 @@ public class BeatsParserTest {
     }
 
     private void sendPayloadToParser(ByteBuf payload) {
-        EmbeddedChannel channel = new EmbeddedChannel(new BeatsParser());
+        EmbeddedChannel channel = new EmbeddedChannel(new BeatsParser(new BatchTracker()));
         channel.writeOutbound(payload);
         Object o = channel.readOutbound();
         channel.writeInbound(o);
@@ -237,7 +237,7 @@ public class BeatsParserTest {
     }
 
     private Batch decodeCompressedBatch(Batch batch) {
-        EmbeddedChannel channel = new EmbeddedChannel(new CompressedBatchEncoder(), new BeatsParser());
+        EmbeddedChannel channel = new EmbeddedChannel(new CompressedBatchEncoder(), new BeatsParser(new BatchTracker()));
         channel.writeOutbound(batch);
         Object o = channel.readOutbound();
         channel.writeInbound(o);
@@ -246,7 +246,7 @@ public class BeatsParserTest {
     }
 
     private Batch decodeBatch(Batch batch) {
-        EmbeddedChannel channel = new EmbeddedChannel(new BatchEncoder(), new BeatsParser());
+        EmbeddedChannel channel = new EmbeddedChannel(new BatchEncoder(), new BeatsParser(new BatchTracker()));
         channel.writeOutbound(batch);
         Object o = channel.readOutbound();
         channel.writeInbound(o);
